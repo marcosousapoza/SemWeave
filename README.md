@@ -1,1 +1,1 @@
-# latex-mcp
+# SemWeave
