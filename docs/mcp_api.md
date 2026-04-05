@@ -10,6 +10,18 @@ python -m semweave
 SEMWEAVE_PROJECT_ROOT=/path/to/project python -m semweave
 ```
 
+## Init Tool
+
+### `init()`
+Call this first in any session. Reads the project's `mcp.config.json` and returns a complete, project-specific annotation skill prompt containing:
+- The exact annotation syntax for this project's comment styles
+- All allowed roles and fields
+- Concrete examples using the project's configuration
+- Rules and workflow for annotating files
+- Summary of existing annotations (if any)
+
+**Returns:** A ready-to-follow instruction string. No need to read the config file manually.
+
 ## Discovery Tools
 
 These tools return metadata only — no raw file content.

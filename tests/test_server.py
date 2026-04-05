@@ -23,6 +23,7 @@ from semweave.mcp_server.server import (
     get_children,
     get_node,
     get_schema,
+    init,
     list_roles,
     read_node,
     read_span,
@@ -180,3 +181,53 @@ class TestContentTools:
         result = read_node(ctx, methods["id"])
         # The content should not contain any mcp: annotations
         assert "mcp:" not in result["content"]
+
+
+class TestInitTool:
+    def test_init_returns_prompt(self, sample_project):
+        root, config = sample_project
+        ctx = _make_ctx(root, config)
+        result = init(ctx)
+        assert isinstance(result, str)
+        # Should contain the project's actual syntax
+        assert "mcp:" in result
+        assert "begin" in result
+        assert "end" in result
+
+    def test_init_contains_roles(self, sample_project):
+        root, config = sample_project
+        ctx = _make_ctx(root, config)
+        result = init(ctx)
+        for role in config.node_schema.roles:
+            assert role in result
+
+    def test_init_contains_comment_style(self, sample_project):
+        root, config = sample_project
+        ctx = _make_ctx(root, config)
+        result = init(ctx)
+        # The config uses % prefix
+        assert "%" in result
+
+    def test_init_shows_existing_nodes(self, sample_project):
+        root, config = sample_project
+        ctx = _make_ctx(root, config)
+        result = init(ctx)
+        # The sample project has 3 nodes, so init should mention them
+        assert "3 annotated node" in result
+
+    def test_init_html_style(self):
+        """Test init with HTML comment style includes suffix."""
+        from semweave.config.schema import CommentStyle, NodeSchema, SemWeaveConfig
+        import tempfile, json
+        from pathlib import Path
+
+        config = SemWeaveConfig(
+            comment_styles=[CommentStyle(prefix="<!--", suffix="-->")],
+            node_schema=NodeSchema(roles=["section", "note"]),
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ctx = _make_ctx(root, config)
+            result = init(ctx)
+            assert "<!--" in result
+            assert "-->" in result

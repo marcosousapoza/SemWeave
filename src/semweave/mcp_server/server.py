@@ -61,6 +61,117 @@ def _strip_content(
     return "\n".join(content_lines)
 
 
+# ── Init tool ────────────────────────────────────────────────────────────
+
+
+def _build_annotation_skill(config: SemWeaveConfig, graph: NodeGraph) -> str:
+    """Build a project-specific annotation skill prompt from the live config."""
+    # Build concrete syntax examples for each comment style
+    examples = []
+    for style in config.comment_styles:
+        prefix = style.prefix
+        suffix = f" {style.suffix}" if style.suffix else ""
+        begin = (
+            f"{prefix} {config.annotation_prefix} {config.begin_keyword} "
+            f"region role=section name=example-name "
+            f"anchors=[sec:example]{suffix}"
+        )
+        end = f"{prefix} {config.annotation_prefix} {config.end_keyword}{suffix}"
+        examples.append(f"    {begin}\n    ... content ...\n    {end}")
+
+    examples_block = "\n\n".join(examples)
+    roles_list = ", ".join(f"`{r}`" for r in config.node_schema.roles)
+
+    fields_block = ""
+    for f in config.node_schema.fields:
+        req = " (required)" if f.required else ""
+        fields_block += f"- `{f.name}`: type={f.type}{req}\n"
+
+    anchor_field = config.node_schema.anchor_field
+
+    # Existing node summary for context
+    node_count = len(graph.nodes)
+    existing = ""
+    if node_count > 0:
+        existing = (
+            f"\n\n## Existing annotations\n\n"
+            f"The project already has {node_count} annotated node(s). "
+            f"Inspect them with `find_nodes()` before adding new annotations "
+            f"to avoid duplicates or conflicts."
+        )
+
+    return f"""\
+# Annotation instructions for this project
+
+You are annotating files for SemWeave, a structured navigation system.
+Insert annotation comments to define navigable regions. Do NOT modify
+any actual content — only add comment lines.
+
+## Syntax
+
+**Begin a region:**
+```
+{config.comment_styles[0].prefix} {config.annotation_prefix} {config.begin_keyword} region role=<ROLE> name=<NAME> {anchor_field}=[<ANCHOR>]{f" {config.comment_styles[0].suffix}" if config.comment_styles[0].suffix else ""}
+```
+
+**End a region:**
+```
+{config.comment_styles[0].prefix} {config.annotation_prefix} {config.end_keyword}{f" {config.comment_styles[0].suffix}" if config.comment_styles[0].suffix else ""}
+```
+
+## Concrete examples using this project's config
+
+{examples_block}
+
+## Allowed roles
+
+{roles_list}
+
+Do NOT invent roles outside this set.
+
+## Available fields
+
+{fields_block}
+The anchor field is `{anchor_field}` (type=list). Assign anchors to important
+nodes using a consistent prefix convention (e.g. `sec:`, `def:`, `code:`).
+
+## Rules
+
+1. Every `{config.begin_keyword}` must have a matching `{config.end_keyword}` in the same file.
+2. Regions must nest cleanly — no overlapping or cross-file boundaries.
+3. Use short, descriptive, kebab-case names (e.g. `name=data-validation`).
+4. Annotate at useful granularity: major sections, definitions, significant
+   code blocks. Do NOT annotate every paragraph or trivial element.
+5. Nest regions to reflect containment (sections containing definitions, etc.).
+6. Only insert comment lines. Never change existing content.
+
+## Workflow
+
+1. Survey the project files to understand the structure.
+2. Plan the annotation hierarchy top-down before inserting anything.
+3. Insert outermost regions first, then nest inner regions.
+4. Verify every `{config.begin_keyword}` has a matching `{config.end_keyword}`.
+5. Assign `{anchor_field}` to nodes that other content may reference.{existing}
+"""
+
+
+@mcp.tool()
+def init(ctx: Context) -> str:
+    """Initialize a SemWeave session and return annotation instructions.
+
+    Call this tool first. It reads the project configuration and returns
+    a complete, project-specific prompt that explains:
+    - The exact annotation syntax for this project's comment styles
+    - The allowed roles and fields
+    - Rules and workflow for annotating files
+
+    The returned instructions are ready to follow — no need to read the
+    config file manually.
+    """
+    graph, config, project_root = _ctx(ctx)
+    return _build_annotation_skill(config, graph)
+
+
 # ── Discovery tools ──────────────────────────────────────────────────────
 
 

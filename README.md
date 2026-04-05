@@ -101,9 +101,12 @@ Supports any comment style — LaTeX (`%`), HTML/Markdown (`<!-- -->`), C-style 
 
 | Category  | Tools |
 |-----------|-------|
+| Init      | `init` — returns a project-specific annotation skill prompt from the config |
 | Discovery | `get_schema`, `list_roles`, `find_nodes`, `get_node`, `get_children`, `get_ancestors`, `find_by_anchor`, `find_references` |
 | Content   | `read_node`, `read_span`, `read_surrounding_context` |
 | Write     | `replace_node`, `insert_before`, `insert_after`, `delete_node` |
+
+Call `init` first in any session — it reads the project's `mcp.config.json` and returns a complete prompt with the exact annotation syntax, allowed roles, and workflow for this specific project.
 
 See [docs/mcp_api.md](docs/mcp_api.md) for the full API reference.
 
@@ -112,7 +115,6 @@ See [docs/mcp_api.md](docs/mcp_api.md) for the full API reference.
 - [Architecture](docs/architecture.md)
 - [Configuration Schema](docs/schema.md)
 - [MCP API Reference](docs/mcp_api.md)
-- [Agent Annotation Skill](skills/annotate.md)
 
 ## Examples
 
