@@ -17,6 +17,13 @@ This enables AI agents to:
 ### Install
 
 ```bash
+# Using uv (recommended)
+uv pip install semweave
+
+# Or run directly without installing
+uvx --from semweave semweave
+
+# Or from source
 pip install -e ".[dev]"
 ```
 
@@ -48,7 +55,32 @@ This is the introduction.
 ### Run
 
 ```bash
+# Using uvx (no install needed)
+uvx --from semweave semweave
+
+# Or if installed
+semweave
+
+# Or as a module
 python -m semweave
+```
+
+### MCP Client Configuration
+
+Add to your MCP client config (e.g. Claude Desktop `claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "semweave": {
+      "command": "uvx",
+      "args": ["--from", "semweave", "semweave"],
+      "env": {
+        "SEMWEAVE_PROJECT_ROOT": "/path/to/your/project"
+      }
+    }
+  }
+}
 ```
 
 ## Annotation Syntax
