@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class CommentStyle(BaseModel):
@@ -67,6 +67,13 @@ class SemWeaveConfig(BaseModel):
     comment_styles: list[CommentStyle] = Field(
         description="Comment syntax definitions for the project's file formats"
     )
+
+    @field_validator("comment_styles")
+    @classmethod
+    def check_comment_styles_not_empty(cls, v: list[CommentStyle]) -> list[CommentStyle]:
+        if not v:
+            raise ValueError("comment_styles must contain at least one entry")
+        return v
     annotation_prefix: str = Field(
         default="mcp:",
         description="Prefix that identifies SemWeave annotations within comments",

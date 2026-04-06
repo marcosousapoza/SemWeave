@@ -77,7 +77,7 @@ def _build_nodes_from_annotations(
                 start_line=begin_ann.line_number,
                 end_line=ann.line_number,
                 content_start=content_start,
-                content_end=max(content_end, content_start),
+                content_end=content_end,
                 parent_id=parent_id,
                 metadata={k: v for k, v in fields.items()},
                 preview=_generate_preview(lines, content_start, content_end),

@@ -194,3 +194,60 @@ class TestDeleteNode:
         ctx = _make_ctx(root, config)
         result = delete_node(ctx, "nonexistent")
         assert "error" in result
+
+
+class TestEmptyRegion:
+    """Tests for regions with no body (begin immediately followed by end)."""
+
+    def _make_empty_region_project(self, tmp_path):
+        config = _config()
+        (tmp_path / "doc.tex").write_text(
+            "Before\n"
+            "% mcp: begin region role=section name=empty anchors=[sec:empty]\n"
+            "% mcp: end\n"
+            "After\n"
+        )
+        return tmp_path, config
+
+    def test_empty_region_read(self, tmp_path):
+        root, config = self._make_empty_region_project(tmp_path)
+        ctx = _make_ctx(root, config)
+        node = find_by_anchor(ctx, "sec:empty")
+        result = read_node(ctx, node["id"])
+        assert result["content"] == ""
+
+    def test_empty_region_replace(self, tmp_path):
+        root, config = self._make_empty_region_project(tmp_path)
+        ctx = _make_ctx(root, config)
+        node = find_by_anchor(ctx, "sec:empty")
+        result = replace_node(ctx, node["id"], "Inserted content.\n")
+        assert result.get("success") is True
+
+        text = (root / "doc.tex").read_text()
+        assert "Inserted content." in text
+        # Both markers must be preserved
+        assert "% mcp: begin region role=section name=empty" in text
+        assert "% mcp: end" in text
+        assert "Before" in text
+        assert "After" in text
+
+    def test_empty_region_delete(self, tmp_path):
+        root, config = self._make_empty_region_project(tmp_path)
+        ctx = _make_ctx(root, config)
+        node = find_by_anchor(ctx, "sec:empty")
+        result = delete_node(ctx, node["id"])
+        assert result.get("success") is True
+
+        text = (root / "doc.tex").read_text()
+        assert "Before" in text
+        assert "After" in text
+        assert "sec:empty" not in text
+
+
+class TestEmptyCommentStylesValidation:
+    def test_empty_comment_styles_rejected(self):
+        with pytest.raises(Exception):
+            SemWeaveConfig(
+                comment_styles=[],
+                node_schema=NodeSchema(roles=["section"]),
+            )
