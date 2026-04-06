@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>SemWeave HTML Example</title>
+</head>
+<body>
+
+<!-- mcp: begin region role=section name=header anchors=[sec:header] -->
+<header>
+  <h1>Documentation Portal</h1>
+  <nav>
+    <a href="#sec:overview">Overview</a> |
+    <a href="#sec:api">API Reference</a>
+  </nav>
+</header>
+<!-- mcp: end -->
+
+<!-- mcp: begin region role=section name=overview anchors=[sec:overview] -->
+<section id="overview">
+  <h2>Overview</h2>
+  <p>This is a sample HTML page annotated with SemWeave regions.</p>
+  <p>The annotations are invisible in the rendered page but provide
+     structured access for AI agents.</p>
+
+  <!-- mcp: begin region role=note name=browser-note anchors=[note:browser] -->
+  <aside>
+    <strong>Note:</strong> HTML comments are not rendered by browsers,
+    making them ideal for SemWeave annotations.
+  </aside>
+  <!-- mcp: end -->
+</section>
+<!-- mcp: end -->
+
+<!-- mcp: begin region role=section name=api anchors=[sec:api] -->
+<section id="api">
+  <h2>API Reference</h2>
+
+  <!-- mcp: begin region role=definition name=find-nodes anchors=[def:find-nodes] -->
+  <article>
+    <h3><code>find_nodes(role?, name?, file?)</code></h3>
+    <p>Search for nodes matching the given filters. Returns summaries only.</p>
+    <p>See <a href="#sec:overview">Overview</a> for general concepts.</p>
+  </article>
+  <!-- mcp: end -->
+
+  <!-- mcp: begin region role=definition name=read-node anchors=[def:read-node] -->
+  <article>
+    <h3><code>read_node(handle)</code></h3>
+    <p>Read the content of a node with annotations stripped.</p>
+  </article>
+  <!-- mcp: end -->
+</section>
+<!-- mcp: end -->
+
+</body>
+</html>

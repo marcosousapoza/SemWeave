@@ -1,0 +1,71 @@
+\documentclass{article}
+\usepackage{amsmath, amsthm}
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{definition}{Definition}
+
+\title{A Sample Paper with SemWeave Annotations}
+\author{Example Author}
+
+\begin{document}
+\maketitle
+
+% mcp: begin region role=section name=introduction anchors=[sec:intro]
+\section{Introduction}
+
+This paper demonstrates how SemWeave annotations can be used to provide
+structured navigation over a LaTeX document. The key idea is that structure
+is declared through comments, not inferred from LaTeX commands.
+
+We will define important concepts in Section~\ref{sec:background} and
+present our main result in Section~\ref{sec:main}.
+% mcp: end
+
+% mcp: begin region role=section name=background anchors=[sec:background]
+\section{Background}
+
+% mcp: begin region role=definition name=graph-def anchors=[def:graph]
+\begin{definition}[Graph]
+A graph $G = (V, E)$ consists of a set of vertices $V$ and a set of
+edges $E \subseteq V \times V$.
+\end{definition}
+% mcp: end
+
+% mcp: begin region role=definition name=tree-def anchors=[def:tree]
+\begin{definition}[Tree]
+A tree is a connected acyclic graph. Every tree with $n$ vertices has
+exactly $n-1$ edges. See also Definition~\ref{def:graph}.
+\end{definition}
+% mcp: end
+
+% mcp: end
+
+% mcp: begin region role=section name=main-results anchors=[sec:main]
+\section{Main Results}
+
+% mcp: begin region role=theorem name=main-theorem anchors=[thm:main]
+\begin{theorem}[Main Theorem]
+Every connected graph contains a spanning tree.
+\end{theorem}
+% mcp: end
+
+% mcp: begin region role=proof name=main-proof anchors=[prf:main]
+\begin{proof}
+We proceed by induction on the number of edges. The base case is
+immediate from Definition~\ref{def:tree}. For the inductive step,
+if $G$ contains a cycle, remove any edge from the cycle. The resulting
+graph is still connected and has fewer edges. By induction, it contains
+a spanning tree, which is also a spanning tree of $G$.
+\end{proof}
+% mcp: end
+
+% mcp: begin region role=example name=example1 anchors=[ex:triangle]
+\subsection{Example}
+Consider the complete graph $K_3$ (triangle). It has 3 vertices and 3 edges.
+Removing any single edge yields a spanning tree (a path of length 2).
+This illustrates Theorem~\ref{thm:main}.
+% mcp: end
+
+% mcp: end
+
+\end{document}

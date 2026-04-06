@@ -1,0 +1,20 @@
+{
+  "comment_styles": [
+    {"prefix": "<!--", "suffix": "-->"}
+  ],
+  "annotation_prefix": "mcp:",
+  "node_schema": {
+    "roles": ["section", "definition", "example", "code", "note"],
+    "fields": [
+      {"name": "role", "required": true, "type": "str"},
+      {"name": "name", "required": false, "type": "str"},
+      {"name": "anchors", "required": false, "type": "list"}
+    ],
+    "anchor_field": "anchors"
+  },
+  "traversal": {
+    "include": ["**/*.html"],
+    "exclude": ["dist/*", "node_modules/*"]
+  },
+  "hide_annotations": true
+}

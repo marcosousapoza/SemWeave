@@ -1,0 +1,20 @@
+{
+  "comment_styles": [
+    {"prefix": "%"}
+  ],
+  "annotation_prefix": "mcp:",
+  "node_schema": {
+    "roles": ["section", "definition", "theorem", "proof", "example", "note"],
+    "fields": [
+      {"name": "role", "required": true, "type": "str"},
+      {"name": "name", "required": false, "type": "str"},
+      {"name": "anchors", "required": false, "type": "list"}
+    ],
+    "anchor_field": "anchors"
+  },
+  "traversal": {
+    "include": ["**/*.tex"],
+    "exclude": ["build/*", "*.aux", "*.log"]
+  },
+  "hide_annotations": true
+}
