@@ -147,11 +147,13 @@ nodes using a consistent prefix convention (e.g. `sec:`, `def:`, `code:`).
 
 ## Workflow
 
-1. Survey the project files to understand the structure.
-2. Plan the annotation hierarchy top-down before inserting anything.
-3. Insert outermost regions first, then nest inner regions.
-4. Verify every `{config.begin_keyword}` has a matching `{config.end_keyword}`.
-5. Assign `{anchor_field}` to nodes that other content may reference.{existing}
+1. Use `find_nodes()` to discover existing annotations before adding new ones.
+2. Use `get_children()` and `get_ancestors()` to understand the current hierarchy.
+3. Plan the annotation hierarchy top-down before inserting anything.
+4. Insert outermost regions first, then nest inner regions.
+5. Verify every `{config.begin_keyword}` has a matching `{config.end_keyword}`.
+6. Assign `{anchor_field}` to nodes that other content may reference.
+7. Use `find_by_anchor()` and `find_references()` to verify cross-references.{existing}
 """
 
 
