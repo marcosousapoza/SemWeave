@@ -16,14 +16,37 @@ This enables AI agents to:
 
 ### Install
 
+**For Claude Code / Claude Desktop (recommended):**
+
 ```bash
-# Using uv (recommended)
-uv pip install semweave
+claude mcp add --scope user semweave \
+  -e SEMWEAVE_PROJECT_ROOT=/path/to/your/project \
+  -- uvx --from git+https://github.com/marcosousapoza/SemWeave semweave
+```
 
-# Or run directly without installing
-uvx --from semweave semweave
+Replace `/path/to/your/project` with the root of the project you want to annotate. This pulls SemWeave directly from GitHub — no separate install step needed.
 
-# Or from source
+**For other MCP clients (manual JSON config):**
+
+Add to your MCP client config (e.g. `claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "semweave": {
+      "command": "uvx",
+      "args": ["--from", "git+https://github.com/marcosousapoza/SemWeave", "semweave"],
+      "env": {
+        "SEMWEAVE_PROJECT_ROOT": "/path/to/your/project"
+      }
+    }
+  }
+}
+```
+
+**From source (development):**
+
+```bash
 pip install -e ".[dev]"
 ```
 
@@ -50,37 +73,6 @@ Add annotations to your files using comment syntax:
 \section{Introduction}
 This is the introduction.
 % mcp: end
-```
-
-### Run
-
-```bash
-# Using uvx (no install needed)
-uvx --from semweave semweave
-
-# Or if installed
-semweave
-
-# Or as a module
-python -m semweave
-```
-
-### MCP Client Configuration
-
-Add to your MCP client config (e.g. Claude Desktop `claude_desktop_config.json`):
-
-```json
-{
-  "mcpServers": {
-    "semweave": {
-      "command": "uvx",
-      "args": ["--from", "semweave", "semweave"],
-      "env": {
-        "SEMWEAVE_PROJECT_ROOT": "/path/to/your/project"
-      }
-    }
-  }
-}
 ```
 
 ## Annotation Syntax
