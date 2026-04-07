@@ -27,21 +27,30 @@ def _get_project_root() -> Path:
 async def lifespan(server: FastMCP):
     project_root = _get_project_root()
     config = load_config(project_root)
-    graph = build_graph(project_root, config)
+    graph = build_graph(project_root, config, project_id="default")
     yield {
-        "graph": graph,
-        "config": config,
-        "project_root": project_root,
+        "projects": {
+            "default": {
+                "graph": graph,
+                "config": config,
+                "project_root": project_root,
+            }
+        },
+        "default_project": "default",
     }
 
 
 mcp = FastMCP("SemWeave", lifespan=lifespan)
 
 
-def _ctx(ctx: Context) -> tuple[NodeGraph, SemWeaveConfig, Path]:
-    """Extract graph, config, and project root from the context."""
+def _ctx(ctx: Context, project_id: str | None = None) -> tuple[NodeGraph, SemWeaveConfig, Path]:
+    """Extract graph, config, and project root from the context for the given project."""
     lc = ctx.lifespan_context
-    return lc["graph"], lc["config"], lc["project_root"]
+    pid = project_id or lc["default_project"]
+    if pid not in lc["projects"]:
+        raise ValueError(f"Unknown project: {pid!r}. Available: {list(lc['projects'])}")
+    proj = lc["projects"][pid]
+    return proj["graph"], proj["config"], proj["project_root"]
 
 
 def _read_file_lines(project_root: Path, file_rel: str) -> list[str]:
@@ -59,6 +68,41 @@ def _strip_content(
     if config.hide_annotations:
         content_lines = adapter.strip_annotations(content_lines)
     return "\n".join(content_lines)
+
+
+# ── Project management tool ──────────────────────────────────────────────
+
+
+@mcp.tool()
+def add_project(ctx: Context, project_root: str, project_id: str | None = None) -> dict[str, Any]:
+    """Register a new project with the SemWeave server.
+
+    Loads the mcp.config.json from project_root, builds the annotation graph,
+    and registers the project under the given project_id (defaults to the
+    directory name). Returns the assigned project_id plus a brief summary so
+    the caller knows which ID to use in subsequent tool calls.
+
+    Projects are segregated: their nodes, configs, and graphs are independent.
+    """
+    root = Path(project_root).resolve()
+    if not root.is_dir():
+        return {"error": f"Directory not found: {project_root}"}
+
+    pid = project_id or root.name
+    config = load_config(root)
+    graph = build_graph(root, config, project_id=pid)
+
+    ctx.lifespan_context["projects"][pid] = {
+        "graph": graph,
+        "config": config,
+        "project_root": root,
+    }
+
+    return {
+        "project_id": pid,
+        "node_count": len(graph.nodes),
+        "roles": config.node_schema.roles,
+    }
 
 
 # ── Init tool ────────────────────────────────────────────────────────────
@@ -158,7 +202,7 @@ nodes using a consistent prefix convention (e.g. `sec:`, `def:`, `code:`).
 
 
 @mcp.tool()
-def init(ctx: Context) -> str:
+def init(ctx: Context, project_id: str | None = None) -> str:
     """Initialize a SemWeave session and return annotation instructions.
 
     Call this tool first. It reads the project configuration and returns
@@ -170,7 +214,7 @@ def init(ctx: Context) -> str:
     The returned instructions are ready to follow — no need to read the
     config file manually.
     """
-    graph, config, project_root = _ctx(ctx)
+    graph, config, project_root = _ctx(ctx, project_id)
     return _build_annotation_skill(config, graph)
 
 
@@ -178,13 +222,13 @@ def init(ctx: Context) -> str:
 
 
 @mcp.tool()
-def get_schema(ctx: Context) -> dict[str, Any]:
+def get_schema(ctx: Context, project_id: str | None = None) -> dict[str, Any]:
     """Get the project's annotation schema and configuration.
 
     Returns the configured roles, fields, annotation format, and comment styles
     so the agent understands the project's structure vocabulary.
     """
-    _, config, _ = _ctx(ctx)
+    _, config, _ = _ctx(ctx, project_id)
     return {
         "annotation_prefix": config.annotation_prefix,
         "begin_keyword": config.begin_keyword,
@@ -197,19 +241,20 @@ def get_schema(ctx: Context) -> dict[str, Any]:
 
 
 @mcp.tool()
-def list_roles(ctx: Context) -> list[str]:
+def list_roles(ctx: Context, project_id: str | None = None) -> list[str]:
     """List all configured node roles.
 
     Returns the finite set of allowed roles that nodes can have,
     as defined in the project configuration.
     """
-    _, config, _ = _ctx(ctx)
+    _, config, _ = _ctx(ctx, project_id)
     return config.node_schema.roles
 
 
 @mcp.tool()
 def find_nodes(
     ctx: Context,
+    project_id: str | None = None,
     role: str | None = None,
     name: str | None = None,
     file: str | None = None,
@@ -220,19 +265,19 @@ def find_nodes(
     the given role, name, and/or file filters. All filters are optional;
     omitting all filters returns all nodes.
     """
-    graph, _, _ = _ctx(ctx)
+    graph, _, _ = _ctx(ctx, project_id)
     nodes = graph.find_nodes(role=role, name=name, file=file)
     return [NodeSummary.from_node(n).model_dump() for n in nodes]
 
 
 @mcp.tool()
-def get_node(ctx: Context, handle: str) -> dict[str, Any]:
+def get_node(ctx: Context, handle: str, project_id: str | None = None) -> dict[str, Any]:
     """Get full metadata for a node by its handle/ID.
 
     Returns all node metadata including parent, children, anchors,
     and line positions. Does not return raw content.
     """
-    graph, _, _ = _ctx(ctx)
+    graph, _, _ = _ctx(ctx, project_id)
     node = graph.get_node(handle)
     if node is None:
         return {"error": f"Node not found: {handle}"}
@@ -240,35 +285,35 @@ def get_node(ctx: Context, handle: str) -> dict[str, Any]:
 
 
 @mcp.tool()
-def get_children(ctx: Context, handle: str) -> list[dict[str, Any]]:
+def get_children(ctx: Context, handle: str, project_id: str | None = None) -> list[dict[str, Any]]:
     """Get direct children of a node.
 
     Returns lightweight summaries of all immediate child nodes.
     """
-    graph, _, _ = _ctx(ctx)
+    graph, _, _ = _ctx(ctx, project_id)
     children = graph.get_children(handle)
     return [NodeSummary.from_node(n).model_dump() for n in children]
 
 
 @mcp.tool()
-def get_ancestors(ctx: Context, handle: str) -> list[dict[str, Any]]:
+def get_ancestors(ctx: Context, handle: str, project_id: str | None = None) -> list[dict[str, Any]]:
     """Get ancestors of a node from immediate parent up to root.
 
     Returns a list of node summaries ordered from immediate parent to root.
     """
-    graph, _, _ = _ctx(ctx)
+    graph, _, _ = _ctx(ctx, project_id)
     ancestors = graph.get_ancestors(handle)
     return [NodeSummary.from_node(n).model_dump() for n in ancestors]
 
 
 @mcp.tool()
-def find_by_anchor(ctx: Context, anchor: str) -> dict[str, Any]:
+def find_by_anchor(ctx: Context, anchor: str, project_id: str | None = None) -> dict[str, Any]:
     """Find the node that owns a given anchor identifier.
 
     Anchors are unique identifiers assigned to nodes for cross-referencing.
     Returns the node summary, or an error if the anchor is not found.
     """
-    graph, _, _ = _ctx(ctx)
+    graph, _, _ = _ctx(ctx, project_id)
     node = graph.find_by_anchor(anchor)
     if node is None:
         return {"error": f"Anchor not found: {anchor}"}
@@ -276,13 +321,13 @@ def find_by_anchor(ctx: Context, anchor: str) -> dict[str, Any]:
 
 
 @mcp.tool()
-def find_references(ctx: Context, anchor: str) -> list[dict[str, Any]]:
+def find_references(ctx: Context, anchor: str, project_id: str | None = None) -> list[dict[str, Any]]:
     """Find all nodes whose content references a given anchor.
 
     Searches the raw content of all nodes for occurrences of the anchor
     string, returning summaries of nodes that contain references to it.
     """
-    graph, config, project_root = _ctx(ctx)
+    graph, config, project_root = _ctx(ctx, project_id)
     referencing: list[NodeSummary] = []
 
     for node in graph.nodes.values():
@@ -303,13 +348,13 @@ def find_references(ctx: Context, anchor: str) -> list[dict[str, Any]]:
 
 
 @mcp.tool()
-def read_node(ctx: Context, handle: str) -> dict[str, Any]:
+def read_node(ctx: Context, handle: str, project_id: str | None = None) -> dict[str, Any]:
     """Read the content of a node with annotation comments stripped.
 
     Returns the raw content between the node's begin and end markers,
     with all annotation comment lines removed for clean reading.
     """
-    graph, config, project_root = _ctx(ctx)
+    graph, config, project_root = _ctx(ctx, project_id)
     node = graph.get_node(handle)
     if node is None:
         return {"error": f"Node not found: {handle}"}
@@ -332,13 +377,14 @@ def read_span(
     handle: str,
     start_offset: int = 0,
     end_offset: int | None = None,
+    project_id: str | None = None,
 ) -> dict[str, Any]:
     """Read a specific span of lines within a node's content.
 
     Offsets are relative to the node's content (0-indexed, after annotation stripping).
     Useful for reading only part of a large node.
     """
-    graph, config, project_root = _ctx(ctx)
+    graph, config, project_root = _ctx(ctx, project_id)
     node = graph.get_node(handle)
     if node is None:
         return {"error": f"Node not found: {handle}"}
@@ -372,6 +418,7 @@ def read_surrounding_context(
     handle: str,
     lines_before: int = 5,
     lines_after: int = 5,
+    project_id: str | None = None,
 ) -> dict[str, Any]:
     """Read content around a node including surrounding context.
 
@@ -379,7 +426,7 @@ def read_surrounding_context(
     context about where the node sits in its file. Annotation comments
     within the node are stripped, but surrounding content is returned as-is.
     """
-    graph, config, project_root = _ctx(ctx)
+    graph, config, project_root = _ctx(ctx, project_id)
     node = graph.get_node(handle)
     if node is None:
         return {"error": f"Node not found: {handle}"}
@@ -410,17 +457,19 @@ def read_surrounding_context(
 
 
 @mcp.tool()
-def replace_node(ctx: Context, handle: str, new_content: str) -> dict[str, Any]:
+def replace_node(ctx: Context, handle: str, new_content: str, project_id: str | None = None) -> dict[str, Any]:
     """Replace the content of a node while preserving its annotation boundaries.
 
     Replaces all lines between the begin and end annotations with new_content.
     The begin/end annotation markers are preserved. The graph is rebuilt after
     the edit to reflect changes.
     """
-    graph, config, project_root = _ctx(ctx)
+    graph, config, project_root = _ctx(ctx, project_id)
     node = graph.get_node(handle)
     if node is None:
         return {"error": f"Node not found: {handle}"}
+
+    pid = project_id or ctx.lifespan_context["default_project"]
 
     try:
         file_path = project_root / node.file
@@ -437,9 +486,9 @@ def replace_node(ctx: Context, handle: str, new_content: str) -> dict[str, Any]:
 
         file_path.write_text("".join(result), encoding="utf-8")
 
-        # Rebuild graph
-        new_graph = build_graph(project_root, config)
-        ctx.lifespan_context["graph"] = new_graph
+        # Rebuild only this project's graph
+        new_graph = build_graph(project_root, config, project_id=pid)
+        ctx.lifespan_context["projects"][pid]["graph"] = new_graph
 
         return {"success": True, "file": node.file, "handle": handle}
     except OSError as e:
@@ -447,16 +496,18 @@ def replace_node(ctx: Context, handle: str, new_content: str) -> dict[str, Any]:
 
 
 @mcp.tool()
-def insert_before(ctx: Context, handle: str, content: str) -> dict[str, Any]:
+def insert_before(ctx: Context, handle: str, content: str, project_id: str | None = None) -> dict[str, Any]:
     """Insert content before a node's begin annotation.
 
     The inserted content appears immediately before the node's opening
     annotation marker. The graph is rebuilt after the edit.
     """
-    graph, config, project_root = _ctx(ctx)
+    graph, config, project_root = _ctx(ctx, project_id)
     node = graph.get_node(handle)
     if node is None:
         return {"error": f"Node not found: {handle}"}
+
+    pid = project_id or ctx.lifespan_context["default_project"]
 
     try:
         file_path = project_root / node.file
@@ -471,8 +522,8 @@ def insert_before(ctx: Context, handle: str, content: str) -> dict[str, Any]:
 
         file_path.write_text("".join(result), encoding="utf-8")
 
-        new_graph = build_graph(project_root, config)
-        ctx.lifespan_context["graph"] = new_graph
+        new_graph = build_graph(project_root, config, project_id=pid)
+        ctx.lifespan_context["projects"][pid]["graph"] = new_graph
 
         return {"success": True, "file": node.file}
     except OSError as e:
@@ -480,16 +531,18 @@ def insert_before(ctx: Context, handle: str, content: str) -> dict[str, Any]:
 
 
 @mcp.tool()
-def insert_after(ctx: Context, handle: str, content: str) -> dict[str, Any]:
+def insert_after(ctx: Context, handle: str, content: str, project_id: str | None = None) -> dict[str, Any]:
     """Insert content after a node's end annotation.
 
     The inserted content appears immediately after the node's closing
     annotation marker. The graph is rebuilt after the edit.
     """
-    graph, config, project_root = _ctx(ctx)
+    graph, config, project_root = _ctx(ctx, project_id)
     node = graph.get_node(handle)
     if node is None:
         return {"error": f"Node not found: {handle}"}
+
+    pid = project_id or ctx.lifespan_context["default_project"]
 
     try:
         file_path = project_root / node.file
@@ -504,8 +557,8 @@ def insert_after(ctx: Context, handle: str, content: str) -> dict[str, Any]:
 
         file_path.write_text("".join(result), encoding="utf-8")
 
-        new_graph = build_graph(project_root, config)
-        ctx.lifespan_context["graph"] = new_graph
+        new_graph = build_graph(project_root, config, project_id=pid)
+        ctx.lifespan_context["projects"][pid]["graph"] = new_graph
 
         return {"success": True, "file": node.file}
     except OSError as e:
@@ -513,16 +566,18 @@ def insert_after(ctx: Context, handle: str, content: str) -> dict[str, Any]:
 
 
 @mcp.tool()
-def delete_node(ctx: Context, handle: str) -> dict[str, Any]:
+def delete_node(ctx: Context, handle: str, project_id: str | None = None) -> dict[str, Any]:
     """Delete a node and all its content including annotation markers.
 
     Removes the entire region from the begin annotation through the end
     annotation (inclusive). The graph is rebuilt after the edit.
     """
-    graph, config, project_root = _ctx(ctx)
+    graph, config, project_root = _ctx(ctx, project_id)
     node = graph.get_node(handle)
     if node is None:
         return {"error": f"Node not found: {handle}"}
+
+    pid = project_id or ctx.lifespan_context["default_project"]
 
     try:
         file_path = project_root / node.file
@@ -534,8 +589,8 @@ def delete_node(ctx: Context, handle: str) -> dict[str, Any]:
 
         file_path.write_text("".join(result), encoding="utf-8")
 
-        new_graph = build_graph(project_root, config)
-        ctx.lifespan_context["graph"] = new_graph
+        new_graph = build_graph(project_root, config, project_id=pid)
+        ctx.lifespan_context["projects"][pid]["graph"] = new_graph
 
         return {"success": True, "file": node.file, "deleted_handle": handle}
     except OSError as e:

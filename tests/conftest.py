@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -91,3 +92,43 @@ def sample_project(tmp_path: Path) -> tuple[Path, SemWeaveConfig]:
 
     config = SemWeaveConfig.model_validate(config_data)
     return tmp_path, config
+
+
+@pytest.fixture
+def multi_project_ctx(tmp_path: Path) -> MagicMock:
+    """Create a mock context with two separate projects."""
+    config_data = {"comment_styles": [{"prefix": "%"}], "node_schema": {"roles": ["section"]}}
+
+    # Project A
+    root_a = tmp_path / "proj_a"
+    root_a.mkdir()
+    (root_a / "mcp.config.json").write_text(json.dumps(config_data))
+    (root_a / "a.tex").write_text(
+        "% mcp: begin region role=section name=alpha anchors=[sec:alpha]\n"
+        "Alpha content\n"
+        "% mcp: end\n"
+    )
+    config_a = SemWeaveConfig.model_validate(config_data)
+    graph_a = build_graph(root_a, config_a, project_id="proj_a")
+
+    # Project B
+    root_b = tmp_path / "proj_b"
+    root_b.mkdir()
+    (root_b / "mcp.config.json").write_text(json.dumps(config_data))
+    (root_b / "b.tex").write_text(
+        "% mcp: begin region role=section name=beta anchors=[sec:beta]\n"
+        "Beta content\n"
+        "% mcp: end\n"
+    )
+    config_b = SemWeaveConfig.model_validate(config_data)
+    graph_b = build_graph(root_b, config_b, project_id="proj_b")
+
+    ctx = MagicMock()
+    ctx.lifespan_context = {
+        "projects": {
+            "proj_a": {"graph": graph_a, "config": config_a, "project_root": root_a},
+            "proj_b": {"graph": graph_b, "config": config_b, "project_root": root_b},
+        },
+        "default_project": "proj_a",
+    }
+    return ctx

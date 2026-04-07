@@ -40,13 +40,18 @@ EXAMPLES_DIR = Path(__file__).parent.parent / "examples"
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
 
-def _make_ctx(root: Path, config: SemWeaveConfig) -> MagicMock:
-    graph = build_graph(root, config)
+def _make_ctx(root: Path, config: SemWeaveConfig, project_id: str = "default") -> MagicMock:
+    graph = build_graph(root, config, project_id=project_id)
     ctx = MagicMock()
     ctx.lifespan_context = {
-        "graph": graph,
-        "config": config,
-        "project_root": root,
+        "projects": {
+            project_id: {
+                "graph": graph,
+                "config": config,
+                "project_root": root,
+            }
+        },
+        "default_project": project_id,
     }
     return ctx
 

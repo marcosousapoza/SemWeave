@@ -52,13 +52,18 @@ def _make_project(tmp_path: Path) -> tuple[Path, SemWeaveConfig]:
     return tmp_path, config
 
 
-def _make_ctx(root: Path, config: SemWeaveConfig) -> MagicMock:
-    graph = build_graph(root, config)
+def _make_ctx(root: Path, config: SemWeaveConfig, project_id: str = "default") -> MagicMock:
+    graph = build_graph(root, config, project_id=project_id)
     ctx = MagicMock()
     ctx.lifespan_context = {
-        "graph": graph,
-        "config": config,
-        "project_root": root,
+        "projects": {
+            project_id: {
+                "graph": graph,
+                "config": config,
+                "project_root": root,
+            }
+        },
+        "default_project": project_id,
     }
     return ctx
 
@@ -105,7 +110,7 @@ class TestReplaceNode:
         replace_node(ctx, node["id"], "New content.\n")
 
         # Graph should be rebuilt
-        new_graph = ctx.lifespan_context["graph"]
+        new_graph = ctx.lifespan_context["projects"]["default"]["graph"]
         first = new_graph.find_by_anchor("sec:first")
         assert first is not None
 
@@ -172,7 +177,7 @@ class TestDeleteNode:
         node = find_by_anchor(ctx, "sec:first")
         delete_node(ctx, node["id"])
 
-        new_graph = ctx.lifespan_context["graph"]
+        new_graph = ctx.lifespan_context["projects"]["default"]["graph"]
         assert new_graph.find_by_anchor("sec:first") is None
         assert new_graph.find_by_anchor("sec:second") is not None
 
