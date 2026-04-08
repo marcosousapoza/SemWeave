@@ -12,9 +12,9 @@ from semweave.model.node import Node
 from semweave.traversal.scanner import scan_project
 
 
-def _make_node_id(file_rel: str, start_line: int) -> str:
-    """Generate a deterministic node ID from file path and start line."""
-    raw = f"{file_rel}:{start_line}"
+def _make_node_id(project_id: str, file_rel: str, start_line: int) -> str:
+    """Generate a deterministic node ID from project, file path, and start line."""
+    raw = f"{project_id}:{file_rel}:{start_line}"
     return hashlib.sha256(raw.encode()).hexdigest()[:12]
 
 
@@ -32,6 +32,7 @@ def _build_nodes_from_annotations(
     lines: list[str],
     annotations: list[ParsedAnnotation],
     config: SemWeaveConfig,
+    project_id: str = "default",
 ) -> list[Node]:
     """Build Node objects from paired begin/end annotations in a single file."""
     nodes: list[Node] = []
@@ -39,7 +40,7 @@ def _build_nodes_from_annotations(
 
     for ann in annotations:
         if ann.type == "begin":
-            node_id = _make_node_id(file_rel, ann.line_number)
+            node_id = _make_node_id(project_id, file_rel, ann.line_number)
             stack.append((ann, node_id))
 
         elif ann.type == "end":
@@ -70,6 +71,7 @@ def _build_nodes_from_annotations(
 
             node = Node(
                 id=node_id,
+                project_id=project_id,
                 role=role,
                 name=name,
                 anchors=anchors,
@@ -97,7 +99,7 @@ def _assign_children(nodes: list[Node]) -> None:
                 parent.children_ids.append(node.id)
 
 
-def build_graph(root: Path, config: SemWeaveConfig) -> NodeGraph:
+def build_graph(root: Path, config: SemWeaveConfig, project_id: str = "default") -> NodeGraph:
     """Build a complete NodeGraph by scanning and parsing all project files.
 
     Returns the graph along with any parse errors encountered.
@@ -121,7 +123,7 @@ def build_graph(root: Path, config: SemWeaveConfig) -> NodeGraph:
         if not result.annotations:
             continue
 
-        nodes = _build_nodes_from_annotations(file_rel, lines, result.annotations, config)
+        nodes = _build_nodes_from_annotations(file_rel, lines, result.annotations, config, project_id=project_id)
         all_nodes.extend(nodes)
 
     _assign_children(all_nodes)

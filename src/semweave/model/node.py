@@ -13,6 +13,7 @@ class Node(BaseModel):
     """
 
     id: str = Field(description="Deterministic identifier (file:start_line)")
+    project_id: str = Field(default="default", description="Project this node belongs to")
     role: str = Field(description="Node role from the configured set")
     name: str | None = Field(default=None, description="Optional user-defined name")
     anchors: list[str] = Field(
@@ -37,6 +38,7 @@ class NodeSummary(BaseModel):
     """Lightweight node representation for discovery responses."""
 
     id: str
+    project_id: str = "default"
     role: str
     name: str | None = None
     anchors: list[str] = Field(default_factory=list)
@@ -48,6 +50,7 @@ class NodeSummary(BaseModel):
     def from_node(cls, node: Node) -> NodeSummary:
         return cls(
             id=node.id,
+            project_id=node.project_id,
             role=node.role,
             name=node.name,
             anchors=node.anchors,

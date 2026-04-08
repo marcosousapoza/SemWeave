@@ -16,6 +16,7 @@ from semweave.config.schema import (
 from semweave.model.graph import NodeGraph
 from semweave.traversal.builder import build_graph
 from semweave.mcp_server.server import (
+    add_project,
     find_by_anchor,
     find_nodes,
     find_references,
@@ -31,14 +32,19 @@ from semweave.mcp_server.server import (
 )
 
 
-def _make_ctx(project_root: Path, config: SemWeaveConfig) -> MagicMock:
+def _make_ctx(project_root: Path, config: SemWeaveConfig, project_id: str = "default") -> MagicMock:
     """Create a mock context with real graph data."""
-    graph = build_graph(project_root, config)
+    graph = build_graph(project_root, config, project_id=project_id)
     ctx = MagicMock()
     ctx.lifespan_context = {
-        "graph": graph,
-        "config": config,
-        "project_root": project_root,
+        "projects": {
+            project_id: {
+                "graph": graph,
+                "config": config,
+                "project_root": project_root,
+            }
+        },
+        "default_project": project_id,
     }
     return ctx
 
@@ -231,3 +237,68 @@ class TestInitTool:
             result = init(ctx)
             assert "<!--" in result
             assert "-->" in result
+
+
+class TestMultiProjectTools:
+    def test_add_project(self, tmp_path):
+        """add_project registers a new project and returns its ID."""
+        root_a = tmp_path / "proj_a"
+        root_a.mkdir()
+        config_data = {"comment_styles": [{"prefix": "%"}], "node_schema": {"roles": ["section"]}}
+        (root_a / "mcp.config.json").write_text(json.dumps(config_data))
+        (root_a / "a.tex").write_text(
+            "% mcp: begin region role=section name=alpha anchors=[sec:alpha]\n"
+            "Alpha content\n"
+            "% mcp: end\n"
+        )
+        config = SemWeaveConfig.model_validate(config_data)
+        ctx = _make_ctx(tmp_path, config)
+        result = add_project(ctx, str(root_a), project_id="proj_a")
+        assert result["project_id"] == "proj_a"
+        assert result["node_count"] == 1
+        assert "proj_a" in ctx.lifespan_context["projects"]
+
+    def test_add_project_default_id_is_dirname(self, tmp_path):
+        root = tmp_path / "myproject"
+        root.mkdir()
+        config_data = {"comment_styles": [{"prefix": "%"}], "node_schema": {"roles": ["section"]}}
+        (root / "mcp.config.json").write_text(json.dumps(config_data))
+        config = SemWeaveConfig.model_validate(config_data)
+        ctx = _make_ctx(tmp_path, config)
+        result = add_project(ctx, str(root))
+        assert result["project_id"] == "myproject"
+
+    def test_add_project_missing_dir(self, tmp_path):
+        config_data = {"comment_styles": [{"prefix": "%"}], "node_schema": {"roles": ["section"]}}
+        config = SemWeaveConfig.model_validate(config_data)
+        ctx = _make_ctx(tmp_path, config)
+        result = add_project(ctx, str(tmp_path / "nonexistent"))
+        assert "error" in result
+
+    def test_find_nodes_in_specific_project(self, multi_project_ctx):
+        result_a = find_nodes(multi_project_ctx, project_id="proj_a")
+        result_b = find_nodes(multi_project_ctx, project_id="proj_b")
+        names_a = [n["name"] for n in result_a]
+        names_b = [n["name"] for n in result_b]
+        assert "alpha" in names_a and "beta" not in names_a
+        assert "beta" in names_b and "alpha" not in names_b
+
+    def test_default_project_routing(self, multi_project_ctx):
+        result = find_nodes(multi_project_ctx)  # no project_id → default (proj_a)
+        names = [n["name"] for n in result]
+        assert "alpha" in names
+
+    def test_node_ids_unique_across_projects(self, multi_project_ctx):
+        nodes_a = find_nodes(multi_project_ctx, project_id="proj_a")
+        nodes_b = find_nodes(multi_project_ctx, project_id="proj_b")
+        ids_a = {n["id"] for n in nodes_a}
+        ids_b = {n["id"] for n in nodes_b}
+        assert ids_a.isdisjoint(ids_b)
+
+    def test_node_carries_project_id(self, multi_project_ctx):
+        nodes = find_nodes(multi_project_ctx, project_id="proj_b")
+        assert all(n["project_id"] == "proj_b" for n in nodes)
+
+    def test_unknown_project_raises(self, multi_project_ctx):
+        with pytest.raises(ValueError, match="Unknown project"):
+            find_nodes(multi_project_ctx, project_id="nonexistent")
